@@ -6,11 +6,13 @@
 
 ## Links to different parts of the page
 
-1. [Description of the repository](#Description%20of%20the%20repository)
+1. [Description of the repository](#description-of-the-repository)
 
-2. [The working directory](#the-working-directory)
+2. [The root folder](#the-root-folder)
 
-3. [The data folder (`./data`)](#the-data-folder-data)
+3. [The data folder (`./data`)](#the-data-folder-.data)
+
+4. [*.qmd files for statistical modeling](#files-for-statistical-modeling)
 
 ## Description of the repository
 
@@ -47,7 +49,7 @@ This folder has 5 files and 2 sub-folders.
 | language | language of publication |
 | issue | journal issue |
 | Selected | Selected or not selected during the screening process |
-: Column description of bib_database.csv
+
 
 **`./Data/Model Data/`** : This folder contains 4 files containing all the information extracted from the selected articles. `spatC_db.csv` and `tempC_db.csv` contain the information on the competitive interactions of carnivorous mammals in the spatial and temporal dimension respectively. While, `spatP_db.csv` and `tempP_db.csv` contain the information on predator-prey interactions in the spatial and temporal dimension respectively. The description of the variables of the four bases are described in the following table
 
@@ -93,11 +95,11 @@ This folder has 5 files and 2 sub-folders.
 | S_area | Sampling area in km^2 | Each study | Both |
 | Pred_evidence | Direct evidence of predation | Global Interaction data base [@poelen2014] | Predator-prey |
 | Hunt_sourve | Bibliographic source of the hunting strategy | Literature | Predator-prey |
-: Description of the columns present in the databases of the model data folder
+
 
 [Back to table of contents ⤒](#a-repository-for)
 
-### *.qmd files for statistical modeling
+### Files for statistical modeling
 
 The `qmd` files contain the entire statistical modeling prthe respective results.
 

@@ -12,17 +12,18 @@ Add Zenodo Doi
 
 ## Links to different parts of the page
 
-1.  [Description of the repository](#Description%20of%20the%20repository)
-2.  [The working directory](#the-working-directory)
-3.  [The data folder (`./data`)](#the-data-folder-data)
+1.  [Description of the repository](#description-of-the-repository)
+2.  [The root folder](#the-root-folder)
+3.  [The data folder (`./data`)](#the-data-folder-.data)
+4.  [Files for statistical modeling]
 
-## Description of the repository
+## Description of the repository {#description-of-the-repository}
 
 This repository contains the data and code used in *From co-occurrence patterns to agonistic interactions. A meta-analysis of carnivore mammals camera trap research*. The data come from a literature review of peer-reviewed articles focused on the study of spatial or temporal co-occurrence of mammals of the order Carnivora with camera traps. All data used in the modeling process are located in the `./Data/` folder. Inside the `./Data/Literature` folder you will find the information of the articles selected in the literature search. The `./Data/Model data` folder contains the files with the information used to perform the statistical modeling. The code is available online in html form for each interaction and in Quarto script format in the root folder.
 
 [Back to table of contents ⤒](#a-repository-for)
 
-### The root folder
+### The root folder {#the-root-folder}
 
 The root folder contains the following files: `_quarto.yml`, `styles.css` and `.gitignore`, which are configuration files for rendering Quarto files (`*.qmd`) and GitHub configurations respectively. The Readme file (`README.md`) contains the same information of the `index.qmd` file, which is the description of the repository. The code is in Quarto format and contains statistical modeling procedures for competitive (`C_modelling_2023.qmd`) and predator-prey (`P_modelling_2023.qmd`) interactions. Finally the `Carnivora_coocurrence.Rproj` is used to open the project in Rstudio.
 
@@ -30,37 +31,37 @@ The scripts are in R language but require [Quarto](https://quarto.org/) to be in
 
 [Back to table of contents ⤒](#a-repository-for)
 
-### The data folder (`./Data`)
+### The data folder (`./Data`) {#the-data-folder-.data}
 
 This folder has 5 files and 2 sub-folders.
 
 **`./Data/Literature/bib_database.csv`**: Database in csv format with the 314 fully scanned articles. The base columns have the following information
 
-+--------------------+-------------------------------------------------------+
-| Column             | Description                                           |
-+====================+=======================================================+
-| label              | Identifier of each article                            |
-+--------------------+-------------------------------------------------------+
-| title              | Complete title                                        |
-+--------------------+-------------------------------------------------------+
-| author             | List of authors                                       |
-+--------------------+-------------------------------------------------------+
-| journal            | publication journal                                   |
-+--------------------+-------------------------------------------------------+
-| abstract           | abstract of each article                              |
-+--------------------+-------------------------------------------------------+
-| year               | year of publication                                   |
-+--------------------+-------------------------------------------------------+
-| doi                | digital object indentification                        |
-+--------------------+-------------------------------------------------------+
-| volume             | journal volume                                        |
-+--------------------+-------------------------------------------------------+
-| language           | language of publication                               |
-+--------------------+-------------------------------------------------------+
-| issue              | journal issue                                         |
-+--------------------+-------------------------------------------------------+
-| Selected           | Selected or not selected during the screening process |
-+--------------------+-------------------------------------------------------+
++-----------------+-------------------------------------------------------+
+| Column          | Description                                           |
++=================+=======================================================+
+| label           | Identifier of each article                            |
++-----------------+-------------------------------------------------------+
+| title           | Complete title                                        |
++-----------------+-------------------------------------------------------+
+| author          | List of authors                                       |
++-----------------+-------------------------------------------------------+
+| journal         | publication journal                                   |
++-----------------+-------------------------------------------------------+
+| abstract        | abstract of each article                              |
++-----------------+-------------------------------------------------------+
+| year            | year of publication                                   |
++-----------------+-------------------------------------------------------+
+| doi             | digital object indentification                        |
++-----------------+-------------------------------------------------------+
+| volume          | journal volume                                        |
++-----------------+-------------------------------------------------------+
+| language        | language of publication                               |
++-----------------+-------------------------------------------------------+
+| issue           | journal issue                                         |
++-----------------+-------------------------------------------------------+
+| Selected        | Selected or not selected during the screening process |
++-----------------+-------------------------------------------------------+
 
 : Column description of bib_database.csv
 
@@ -154,7 +155,7 @@ This folder has 5 files and 2 sub-folders.
 
 [Back to table of contents ⤒](#a-repository-for)
 
-### \*.qmd files for statistical modeling
+### Files for statistical modeling
 
 The `qmd` files contain the entire statistical modeling prthe respective results.
 
