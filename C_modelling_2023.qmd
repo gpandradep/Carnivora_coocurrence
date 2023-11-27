@@ -1,0 +1,1776 @@
+---
+title: "Competitive interactions co-occurrence modelling"
+format:
+  html:
+   message: false
+   warning: false
+   code-fold: true
+   code-tools: true
+   toc: true
+   self-contained: true
+   theme: journal
+
+bibliography: references.bib
+---
+
+# Packages
+
+```{r}
+#| message: false
+#| warning: false
+
+# Data manipulation package
+library(tidyverse) # Easily Install and Load the 'Tidyverse'
+library(psych) # Procedures for Psychological, Psychometric, and Personality Research
+
+# Modelling packages
+library(nlme) # Linear and Nonlinear Mixed Effects Models
+library(betareg) # Beta Regression
+library(glmmTMB) # Generalized Linear Mixed Models using Template Model Builder
+library(AICcmodavg) # Model Selection and Multimodel Inference Based on (Q)AIC(c)
+library(MuMIn) # Multi-Model Inference
+
+#Modelling utility packages
+library(broom) # Convert Statistical Objects into Tidy Tibbles
+library(broom.mixed) # Tidying Methods for Mixed Models
+library(insight) # Easy Access to Model Information for Various Model Objects
+library(modelbased) # Estimation of Model-Based Predictions, Contrasts and Means
+library(parameters) # Processing of Model Parameters
+library(performance) # Assessment of Regression Models Performance
+library(DHARMa) # Residual Diagnostics for Hierarchical (Multi-Level / Mixed) Regression Models
+library(ggeffects) # Create Tidy Data Frames of Marginal Effects for 'ggplot' from Model Outputs
+
+# Grapich packages
+library(GGally) # Extension to 'ggplot2'
+library(patchwork) # The Composer of Plots
+
+
+# Table output packages
+library(kableExtra) # Construct Complex Table with 'kable' and Pipe Syntax
+library(DT)
+
+
+library(showtext)
+font_add_google("Roboto", "Roboto")
+showtext_auto()
+showtext_opts(dpi = 300)
+
+```
+
+# Variables description
+
+| Variable  | Description                                                                                                               | Units                                    | Source                                  |
+|------------------|--------------------|------------------|------------------|
+| SIF       | Spatial species interaction factor. SIF\<1: segregation, SIF=1: independence, SIF\>1= aggregation                         | index                                    | Each study                              |
+| Ov_coeff  | Temporal overlap coefficient. Ov_coeff =1: complete activity overlap, Ov_Coeff =0: No activity overlap                    | index                                    | Each study                              |
+| CBMratio  | Competitors body mass ratio: ln( dominant competitor body mass/ subordinate competitor body mass)                         | index                                    | COMBINE data base [@soria2021]          |
+| Diet_dist | Dominant and subordinate competitor category diets: Same if pair of competitors shares de diet category, different if not | category                                 | PHYLACINE trait data base [@faurby2020] |
+| Phy_dist  | Pairwise mitochondrial DNA phylogenetic distances                                                                         | mitochondrial DNA phylogenetic distances | @hassanin2021                           |
+| Abs_lat   | Absolute latitude of each study when reported                                                                             | coordinates                              | Each study                              |
+| Avg_dist  | Average distance (km) between camera trap stations reported. Only used for spatial co-occurrence models                   | Average liner distance in km             | Each study                              |
+| Samp_dur  | duration of sampling in months. Only used for temporal co-occurrence models                                               | Months                                   | Each study                              |
+| Locality  | Each sampling location where species co-occurrence information was obtained, within each study                            | category                                 | Each study                              |
+| Label     | Each study unique ID                                                                                                      | category                                 | Each study                              |
+
+: List of variables used to modelling spatial co-occurrence patterns of competitive interactions {#tbl-variables}
+
+# Data
+
+The data correspond to studies evaluating the spatial and temporal co-occurrence of mammals of the order Carnivora. In all cases the species are of the same order and present ecological interactions of competition.
+
+::: panel-tabset
+## Spatial data
+
+Spatial co-occurrence data of carnivorous mammals were measured using the species interaction factor (SIF). This is a parameter derived from multi-species occupancy models [@waddle2010; @richmond2010].
+
+```{r}
+# Load the spatial co-ocurrence data base of competitive interactions
+spatC_db <- read_delim("Data/Model data/spatC_db.csv", delim = ";" )[,-1] %>%
+  # Select the variables
+  select(SIF, D_competitor, D_family, S_competitor, S_family, mass_ratio, diet_dist, Lat, Lat_abs, p_distance, Avg_dist, Locality, Label)
+DT::datatable(spatC_db)
+```
+
+The @tbl-Ssum contain the general description of the numeric variables of spatial data base. The table was constructed with psych package [@psych]
+
+```{r}
+#| label: tbl-Ssum
+#| tbl-cap: General description of the spatial co-occurrence data base for competitive interactions. 
+Spatnum_summary <- spatC_db %>% 
+  select_if(is.numeric) %>% 
+  describe(. ,fast = T) 
+
+kbl(Spatnum_summary, caption = "General description of the spatial co-occurrence data base for competitive interactions", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+We use the GGAlly package to explore the visual relationship between numerical variables [@GGally]. We used pearson's correlation coefficient
+
+```{r}
+#| message: false
+#| warning: false
+#| label: fig-Sccorplot
+#| fig-cap: Spatial competitive co-occurrence corplot
+
+(Spat_cor <- select_if(spatC_db, is.numeric) %>% # select numeric variables
+  ggpairs(.,
+          # Correlation coefficient upper part
+        upper = list(continuous= wrap("cor", method= "pearson", 
+                                      digits=2, corSize= 80)),
+        lower = list( continuous= "smooth")) +
+  theme_bw()+
+    theme(text=element_text(family = "Roboto")))
+```
+
+## Temporal data
+
+The temporal data corresponds to the co-occurrence of Carnivora mammals measured by overlap coefficient of kernel activity curves [@ridout2009].
+
+```{r}
+
+tempC_db <- read_delim("Data/Model data/tempC_db.csv", delim = ";")[,-1] %>%
+  select(Ov_coeff, D_competitor, D_family, S_competitor, S_family, mass_ratio, diet_dist, Lat, Lat_abs, p_distance, Samp_dur, Locality, Label)
+  
+DT::datatable(tempC_db )
+```
+
+The @tbl-Tsum contain the general description of the numeric variables of spatial data base.
+
+```{r}
+#| label: tbl-Tsum
+#| tbl-cap: General description of the temporal co-occurrence data base for competitive interactions.
+Tempnum_summary <- tempC_db %>% 
+  select_if(is.numeric) %>% 
+  describe(. ,fast = T) 
+
+kbl(Tempnum_summary, caption = "General description of the temporal co-occurrence data base for competitive interactions", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+We use the GGAlly package to explore the visual relationship between numerical variables [@GGally]. We used pearson's correlation coefficient
+
+```{r}
+#| message: false
+#| warning: false
+#| label: fig-Scorplot
+#| fig-cap: Temporal competitive co-occurrence corplot
+(Temp_cor <- select_if(tempC_db, is.numeric) %>% 
+  ggpairs(.,
+        upper = list(continuous= wrap("cor", method= "pearson", 
+                                      digits=2, corSize= 80)),
+        lower = list( continuous= "smooth")) +
+  theme_bw()+
+  theme(text=element_text(family = "Roboto")))
+```
+:::
+
+# Modelling procedure
+
+## Standardize numeric covariates
+
+The numerical covariates were standardized to mean 0 and standard deviation 1, which facilitates model fitting and direct comparison of regression coefficients. In addition, pairs of species that do not contain information on any of the variables (cells with NAs) were eliminated.
+
+Because we aimed to evaluate whether the patterns found varied depending on the dominant competitor family, we made subsets of the databases. For spatial co-occurrence we only subset the felidae family. For temporal co-occurrence we subset the families Felidae, Canidae and Mustelidae.
+
+```{r}
+
+# Function to standardized the numeric variables
+scale_this <- function(data){scale(data) %>% as.vector() }
+
+# Select the variables for Spatial and temporal data sets
+SC_vars <- c("mass_ratio", "Lat_abs", "p_distance", "Avg_dist")
+TC_vars <- c("mass_ratio", "Lat_abs", "p_distance", "Samp_dur")
+
+# All data Spatial
+spatC_modsdf <- spatC_db %>%
+  drop_na() %>% 
+  mutate(across(all_of(SC_vars), scale_this)) 
+dim(spatC_modsdf)
+
+#Subset for spatial data
+# Felidae Spatial
+spatC_modsdf_F <- spatC_modsdf %>% 
+  filter(D_family == "Felidae")
+dim(spatC_modsdf_F)
+
+# All data Temporal
+tempC_modsdf <- tempC_db %>%
+  drop_na() %>% 
+  mutate(across(all_of(TC_vars), scale_this))
+dim(tempC_modsdf)
+
+
+#subset for temporal data
+# Felidae Temporal
+tempC_modsdf_F <- tempC_modsdf %>%
+   filter(D_family == "Felidae")
+dim(tempC_modsdf_F)
+
+# Canidae Temporal
+tempC_modsdf_C <- tempC_modsdf %>%
+   filter(D_family == "Canidae")
+dim(tempC_modsdf_C)
+
+# Mustelidae Temporal
+tempC_modsdf_M <- tempC_modsdf %>%
+   filter(D_family == "Mustelidae")
+dim(tempC_modsdf_M)
+```
+
+## Spatial modelling procedure
+
+### Influential observations
+
+Identify the presence of outliers or observations that may influence the models. For the spatial co-occurrence data we fit a general linear model with all covariates and interactions. We then checked for the presence of extreme data using Laverage distance plots from performance package [@performance].
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: Spatial co-occurrence leverage distance
+#| fig-subcap: 
+#|  - "Outliers of all data spatial model"
+#|  - "Outliers of felidae dominant competior spatial model"
+#| layout-ncol: 2
+#| fig-width: 8
+ 
+# Fit model with all data
+SCmods_outl <- lm(SIF ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2, data= spatC_modsdf)
+
+# Fit model with only felids as dominant
+SCmods_outl_F <- lm(SIF ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2, data= spatC_modsdf_F)
+
+# Check outliers for each model
+SC_out <- check_outliers(SCmods_outl)
+SC_out_F <- check_outliers(SCmods_outl_F)
+
+
+# Leverage plot for all data model
+plot(SC_out)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+# Leverage plot for felidae as dominant competitor
+plot(SC_out_F)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+```
+
+### Collinearity
+
+We checked the collinearity of the variables used using the variance inflation factor (VIF). We consider that an VIF value \> 10 indicates a high collinearity of the variables [@zuur2010a].
+
+To calculate the VIF we use the Performance package [@performance].
+
+```{r}
+
+#| message: false
+#| warning: false
+#| label: fig-Scoll
+#| fig-cap: Spatial co-occurrence collinearity
+#| fig-subcap: 
+#|  - "VIF of all data spatial model"
+#|  - "VIF of felidae dominant competior spatial model"
+#| layout-ncol: 2
+#| fig-width: 8
+
+# Fit model with all data
+spatC_coll <- lm(SIF ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist, data= spatC_modsdf)
+
+# Fit model with only felids as dominant
+spatC_coll_F <- lm(SIF ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist, data= spatC_modsdf_F)
+
+# Check outliers for each model
+spatC_colltab <- check_collinearity(spatC_coll)
+spatC_colltab_F <- check_collinearity(spatC_coll_F)
+
+# Vif plots
+plot(spatC_colltab)+
+  labs(subtitle = "All data Spatial model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+
+plot(spatC_colltab_F)+
+  labs(subtitle = "Felidae dominant competitor Spatial model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+
+```
+
+### Model assumptions
+
+#### All data
+
+We first check the assumptions of the model. To do this we fit the most complex model containing all available variable interactions and random factors. We then visually evaluated the normality of the residuals, linearity and homogeneity of variance using the performance package [@performance].
+
+```{r}
+
+Spat_diag_m <-lme(SIF ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs)^2, 
+                  random = ~1|Label/Locality,
+                  method = "REML",
+                  data= spatC_modsdf)
+
+Spat_diagnostic <- check_model(Spat_diag_m, 
+                               check = c("homogeneity", "linearity", "qq", "normality", "reqq"))
+Spat_diagnostic 
+
+```
+
+We detect deviations from assumptions. Particularly there is a kurtosis in the distribution of the residuals. There are also deviations from linearity. For that reason, we fit a T-student family glm using glmmTMB package [@glmmTMB]. To evaluate the GLMM we use the DHARMa package [@DHARMa], which applies simulated residuals to evaluate the assumptions.
+
+```{r}
+Spat_diag_t <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label/Locality),
+                   data=spatC_modsdf, 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+res_t <- simulateResiduals(Spat_diag_t)
+plot(res_t)
+
+
+```
+
+The t-family GLMM improves considerably and the graphs suggest that it meets the distribution assumptions.
+
+#### Felidae
+
+This section verifies the model assumptions considering only felids as dominant competitors.
+
+```{r}
+Spat_diag_m_F <-lme(SIF ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2, 
+                  random = ~1|Label/Locality,
+                  method = "REML",
+                  data= spatC_modsdf_F)
+
+Spat_diagnostic_F <- check_model(Spat_diag_m_F, check = c("homogeneity", "linearity", "qq", "normality"))
+Spat_diagnostic_F
+```
+
+Deviations from the assumptions are detected, so we tried a GLMM of family t student.
+
+```{r}
+Spat_diag_tF <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label/Locality),
+                   data=spatC_modsdf_F, 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+res_t_F <- simulateResiduals(Spat_diag_tF)
+plot(res_t_F)
+
+```
+
+Since deviations from homogeneity of variance were detected, we evaluated which variables are involved in the model inadequacies.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Uniformity of variance test of Diet category"
+#|  - "Uniformity of variance test of mass ratio"
+#|  - "Uniformity of variance test of absolute latitude"
+#|  - "Uniformity of variance test of phylogenetic distance"
+#|  - "Uniformity of variance test of Average distance"
+#| layout-ncol: 2
+#| fig-width: 8
+testCategorical(res_t_F, spatC_modsdf_F$diet_dist) 
+testQuantiles(res_t_F, spatC_modsdf_F$mass_ratio)
+testQuantiles(res_t_F, spatC_modsdf_F$Lat_abs)
+testQuantiles(res_t_F, spatC_modsdf_F$p_distance)
+testQuantiles(res_t_F, spatC_modsdf_F$Avg_dist)
+
+```
+
+We detected non-uniformity in the range of body mass ratio, phylogenetic distance, absolute latitude and average camera distance. Additionally, we identified that observation 84 (previously identified as outlier) does have an effect on model fit. To improve the fit, we modeled the variation of the variables by means of the dispformula term, from the glmm TMB package [@glmmTMB].
+
+```{r}
+Spat_diag_tF2 <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label/Locality),
+                   dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                   data=spatC_modsdf_F[-84,], 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+res_t_F2 <- simulateResiduals(Spat_diag_tF2)
+plot(res_t_F2)
+
+```
+
+### Random structure
+
+#### All data
+
+Following the @zuur2009 protocol, we evaluated the relevance of the inclusion of random effects. For this we fit the previously selected model with and without the random effects (Label and Locality of each study). We selected the model with the best structure using the Akaike information criterion (AIC) with the AICcmodavg package [@AICcmodavg].
+
+```{r}
+
+#| tbl-cap: Random-effects structure selection table for spatial co-occurrence data
+
+# Fit model without random effects
+Spat_r0 <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2,
+                   data=spatC_modsdf, 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+# Fit model with label as random effect
+Spat_r1 <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label),
+                   data=spatC_modsdf, 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+# Fit model with label and Locality as random effects
+Spat_r2 <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label/Locality),
+                   data=spatC_modsdf, 
+                   family=t_family(link = "identity"), 
+                   REML = T)
+
+
+# Rank the models with the AIC
+spat_AICtab <- aictab(cand.set = list(Spat_r0, Spat_r1, Spat_r2),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+
+kbl(spat_AICtab, caption = "Random-effects structure selection table for spatial co-occurrence data", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+The @tbl-Sraic suggests that both models with Label as random effects and without random effects are equally supported. To visualize the variation of the random parameters of each group, we use the estimate_grouplevel function of the modelbased package [@modelbased].
+
+```{r}
+estimate_grouplevel(Spat_r1) %>% # Get random parameters
+  plot()+  #plot
+  # aesthetic changes
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+```
+
+There is no significant variation from each group level in random effects. We now check the goodness of fit of these models.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Gof-test of model with Label as random effects"
+#|  - "Gof-test of model without random effects"
+#| layout-ncol: 2
+#| fig-width: 8
+simulateResiduals(Spat_r1, plot = T)
+simulateResiduals(Spat_r0, plot = T)
+```
+
+Both models have no lack of fit. In this case, we select the simpler one (without random effects) to continue with the selection of fixed effects.
+
+#### Felidae
+
+We performed the same procedure for Felidae
+
+```{r}
+
+Spat_r0_F <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2,
+                   dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                   data=spatC_modsdf_F[-84,], 
+                   family=t_family(link = "identity"), 
+                   REML = T,
+                   start = list(psi = log(2.87)),
+                   map = list(psi = factor(NA)))
+
+Spat_r1_F <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label),
+                   dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                   data=spatC_modsdf_F[-84,], 
+                   family=t_family(link = "identity"), 
+                   REML = T,
+                   start = list(psi = log(2.87)),
+                   map = list(psi = factor(NA)))
+
+Spat_r2_F <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2 +(1|Label/Locality),
+                   dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                   data=spatC_modsdf_F[-84,], 
+                   family=t_family(link = "identity"), 
+                   REML = T,
+                   start = list(psi = log(2.87)),
+                   map = list(psi = factor(NA)))
+
+spat_AICtab_F <- aictab(cand.set = list(Spat_r0_F, Spat_r1_F, Spat_r2_F),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+
+kbl(spat_AICtab_F, caption = "Random-effects structure selection table for spatial co-occurrence data when Felidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+In the case of Felidae the model selection indicates that random effects are not adequate. This is because there is no variation between Label or Locality levels.
+
+```{r}
+estimate_grouplevel(Spat_r1_F) %>% 
+  plot()+ 
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+```
+
+All label coefficient are the same for felids data
+
+### Fixed predictor selections
+
+To select the fixed effects structure we also used the Akaike information criterion (AIC). Models with a delta AIC \<2 are considered equally plausible [@burnham2002]. Because we are going to choose the fixed effects structure, we refit the previously identified model without using the restricted maximum likelihood (REML) [@zuur2009a]. Since co-occurrence patterns may be generated by the interaction of variables, we fit all possible combinations of variables, limiting to a maximum of three parameters per model. To do this we will used the dredge function of the MuMIn package [@MuMIn].
+
+#### All data
+
+```{r}
+# Create a global model
+SC_global <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2,
+                   data=spatC_modsdf, 
+                   family= t_family(link = "identity"), 
+                   REML = F,
+                   na.action = "na.fail",
+                   start = list(psi = log(1.69)),
+map = list(psi = factor(NA)))
+
+#Fit all posible combination limit to 3 parameters
+SC_selec <- dredge(SC_global, rank = "AIC", m.lim= c(NA,3))
+
+
+```
+
+```{r}
+kbl(SC_selec, caption = "Fixed-effects structure selection table for spatial co-occurrence data", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+#### Felidae
+
+Note that this time the limit number of parameters in the function is 7. This is due to the number of parameters of the dispersion terms, which add 4 additional parameters.
+
+```{r}
+spatC_modsdf_F <- spatC_modsdf_F[-84,]
+
+SC_global_F <- glmmTMB(formula = SIF~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Avg_dist)^2,
+                   dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                   data=spatC_modsdf_F, 
+                   family=t_family(link = "identity"), 
+                   REML = F,
+                   start = list(psi = log(2.87)),
+                   map = list(psi = factor(NA)),
+                   na.action = "na.fail")
+
+SC_selec_F <- dredge(SC_global_F, rank = "AIC", 
+                     fixed = c("disp(Avg_dist)", "disp(Lat_abs)", "disp(mass_ratio)", "disp(p_distance)"), # Mantain dispersion parameters in all models
+                     m.lim= c(NA,7)) # 7 parameteres becasue we must add the dispersion terms
+
+
+```
+
+```{r}
+
+kbl(SC_selec_F, caption = "Fixed-effects structure selection table for spatial co-occurrence data when Felidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+### Confidence intervals explorations
+
+Consistent with the model selection strategy (AIC) and to avoid uninformative variables, we explored the 85% confidence intervals of the regression coefficients of the best models [@sutherland2023]. Variables whose 85% CI overlap 0 are considered as uninformative and therefore not included in the inference [@arnold2010].
+
+```{r}
+
+# Function to get 85%IC
+get_ci <- function(mod_name, mods){
+  ci_df <- parameters::model_parameters(mods, ci = 0.85) %>% 
+    select(Parameter, Coefficient, CI_low, CI_high, Component) %>% 
+    filter(Component == "conditional") %>% 
+    filter(Parameter != "(Intercept)") %>%
+    mutate(Model = mod_name,
+           Informative = case_when(
+    CI_low < 0 & CI_high < 0 ~ "yes",
+    CI_low > 0 & CI_high > 0 ~ "yes",
+    TRUE ~ "no")) 
+  return(ci_df)   
+}
+
+# Function to plot
+
+ci_plot <- function(ci_df){
+ggplot(ci_df, aes(x=Coefficient, y= Parameter))+
+  geom_pointrange(aes(xmin=CI_low, xmax= CI_high,
+                      col= Model, linetype= Informative),
+                  position = position_dodge2(0.5), linewidth= 1)+
+  scale_linetype_manual(values = c("no"="dashed", "yes"= "solid"))+
+  geom_vline(xintercept = 0, linetype= "dashed")+
+  scale_color_viridis_d()+
+  labs(caption = "estimates with 85% ci intervals",
+       col= "Model ID")+
+  theme_bw()+
+    theme(text=element_text(family = "Roboto"))
+  
+}
+
+
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "All data best model 85% CI"
+#|  - "Felidae data best model 85% CI"
+#| layout-ncol: 2
+#| fig-width: 8
+# get best models for all data 
+SC_best_mods <- get.models(SC_selec, subset = delta <2)
+# get best models for felidae subset data
+SC_best_mods_F <- get.models(SC_selec_F, subset = delta <2)
+
+# Apply the function to obtain the table of coefficients of selected the models
+SC_best_ci <- map2_df(names(SC_best_mods), SC_best_mods, get_ci) 
+SC_best_ci_F <- map2_df(names(SC_best_mods_F), SC_best_mods_F, get_ci) 
+
+ci_plot(SC_best_ci)+ labs(title= "All data")
+ci_plot(SC_best_ci_F)+ labs(title= "Felidae dominant competitor")
+```
+
+## Temporal modelling procedure
+
+### Influential observations
+
+Identify the presence of outliers or observations that may influence the models. For the temporal co-ocurrence data we fit a beta family generalized linear model with all covariates and interactions [@betareg]. We then checked for the presence of extreme observations using Cook's distance plots from performance package [@performance].
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: Temporal co-occurrence cook distance distance
+#| fig-subcap: 
+#|  - "Outliers of all data temporal model"
+#|  - "Outliers of Felidae dominant competior Temporal model"
+#|  - "Outliers of Celidae dominant competior Temporal model"
+#|  - "Outliers of Mustelidae dominant competior Temporal model"
+#| layout-ncol: 2
+#| fig-width: 8
+# Models for each data
+TCmods_outl <- betareg(Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2, data= tempC_modsdf)
+
+TCmods_outl_F <- betareg(Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2, data= tempC_modsdf_F)
+
+TCmods_outl_C <-betareg(Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2, data= tempC_modsdf_C)
+
+TCmods_outl_M <- betareg(Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2, data= tempC_modsdf_M)
+
+#Check outliers
+TC_out <- check_outliers(TCmods_outl)
+TC_out_F <- check_outliers(TCmods_outl_F)
+TC_out_C <- check_outliers(TCmods_outl_C)
+TC_out_M <- check_outliers(TCmods_outl_M)
+
+# Cook's distance plots
+plot(TC_out)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+plot(TC_out_F)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+plot(TC_out_C)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+plot(TC_out_M)+
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+```
+
+A possible outlier was detected for the Mustelidae data as a dominant competitor. It corresponds to observation 27 which exceeded the 0.98 Cook's distance threshold.
+
+### Collinearity
+
+We checked the collinearity of the variables used using the variance inflation factor (VIF). We consider that an VIF value \> 10 indicates a high collinearity of the variables [@zuur2010a].
+
+To calculate the VIF we use the Performance package [@performance].
+
+```{r}
+#| label: fig-TCcoll_fam
+#| fig-cap: Outliers model detection temporal models
+#| fig-subcap: 
+#|  - "VIF of all data model"
+#|  - "VIF of Felidae model"
+#|  - "VIF of Canidae model"
+#|  - "VIF of Mustelidae model"
+#| layout-ncol: 2
+#| fig-width: 8
+# Fit models
+tempC_coll <- betareg(Ov_coeff ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur, data= tempC_modsdf)
+tempC_coll_F <- betareg(Ov_coeff ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur, data= tempC_modsdf_F)
+tempC_coll_C <- betareg(Ov_coeff ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur, data= tempC_modsdf_C)
+tempC_coll_M <- betareg(Ov_coeff ~ mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur, data= tempC_modsdf_M)
+
+# Check collinearity
+tempC_colltab <- check_collinearity(tempC_coll)
+tempC_colltab_F <- check_collinearity(tempC_coll_F)
+tempC_colltab_C <- check_collinearity(tempC_coll_C)
+tempC_colltab_M <- check_collinearity(tempC_coll_M )
+
+
+# Vif plots
+plot(tempC_colltab)+
+  labs(subtitle = "All data Temporal model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+
+plot(tempC_colltab_F)+
+  labs(subtitle = "Felidae Temporal model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+
+plot(tempC_colltab_C)+
+  labs(subtitle = "Canidae Temporal model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+
+plot(tempC_colltab_M)+
+  labs(subtitle = "Mustelidae Temporal model")+
+  theme_bw()+
+  theme(legend.position = "none",
+        text=element_text(family = "Roboto"))
+```
+
+### Model assumptions
+
+We verify the model assumptions by visual inspection of the simulated residuals from the DHARMa package [@DHARMa]. To do so we fit the more complex model which includes fixed variables and their interactions, as well as random effects.
+
+#### All data
+
+```{r}
+Temp_diag <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                   data=tempC_modsdf, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res <- simulateResiduals(Temp_diag)
+plot(Temp_diag_res)
+```
+
+Since deviations from homogeneity of variance were detected, we evaluated which variables are involved in the model inadequacies.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Uniformity of variance test of Diet category"
+#|  - "Uniformity of variance test of mass ratio"
+#|  - "Uniformity of variance test of absolute latitude"
+#|  - "Uniformity of variance test of phylogenetic distance"
+#|  - "Uniformity of variance test of sampling duration"
+#| layout-ncol: 2
+#| fig-width: 8
+testCategorical(Temp_diag_res, tempC_modsdf$diet_dist) 
+testQuantiles(Temp_diag_res , tempC_modsdf$mass_ratio)
+testQuantiles(Temp_diag_res , tempC_modsdf$Lat_abs)
+testQuantiles(Temp_diag_res , tempC_modsdf$p_distance)
+testQuantiles(Temp_diag_res , tempC_modsdf$Samp_dur)
+```
+
+We detected non-uniformity in the range of diet distance, phylogenetic distance, absolute latitude and mean camera distance. Additionally, we identified that observation 84 (previously identified as outlier) does have an effect on model fit. To improve the fit, we modeled the variation of the variables by means of the dispformula term, from the glmm TMB package [@glmmTMB].
+
+```{r}
+Temp_diag2 <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                      dispformula = ~diet_dist+ p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res2 <- simulateResiduals(Temp_diag2)
+plot(Temp_diag_res2)
+```
+
+#### Felidae
+
+```{r}
+Temp_diag_F <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_F <- simulateResiduals(Temp_diag_F)
+plot(Temp_diag_res_F)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Uniformity of variance test of Diet category"
+#|  - "Uniformity of variance test of mass ratio"
+#|  - "Uniformity of variance test of absolute latitude"
+#|  - "Uniformity of variance test of phylogenetic distance"
+#|  - "Uniformity of variance test of Sampling duration"
+#| layout-ncol: 2
+#| fig-width: 8
+testCategorical(Temp_diag_F, tempC_modsdf_F$diet_dist)
+testQuantiles(Temp_diag_F, tempC_modsdf_F$mass_ratio)
+testQuantiles(Temp_diag_F, tempC_modsdf_F$Lat_abs)
+testQuantiles(Temp_diag_F, tempC_modsdf_F$p_distance)
+testQuantiles(Temp_diag_F, tempC_modsdf_F$Samp_dur)
+
+```
+
+```{r}
+Temp_diag_F2 <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                      dispformula = ~mass_ratio+p_distance+Lat_abs+Samp_dur,
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_F2 <- simulateResiduals(Temp_diag_F2)
+plot(Temp_diag_res_F2)
+```
+
+#### Canidae
+
+```{r}
+Temp_diag_C <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_C <- simulateResiduals(Temp_diag_C)
+plot(Temp_diag_res_C)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Uniformity of variance test of Diet category"
+#|  - "Uniformity of variance test of mass ratio"
+#|  - "Uniformity of variance test of absolute latitude"
+#|  - "Uniformity of variance test of phylogenetic distance"
+#|  - "Uniformity of variance test of Sampling duration"
+#| layout-ncol: 2
+#| fig-width: 8
+testCategorical(Temp_diag_C, tempC_modsdf_C$diet_dist)
+testQuantiles(Temp_diag_C, tempC_modsdf_C$mass_ratio)
+testQuantiles(Temp_diag_C, tempC_modsdf_C$Lat_abs)
+testQuantiles(Temp_diag_C, tempC_modsdf_C$p_distance)
+testQuantiles(Temp_diag_C, tempC_modsdf_C$Samp_dur)
+```
+
+```{r}
+Temp_diag_C2 <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                      dispformula = ~Samp_dur+Lat_abs,
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_C2 <- simulateResiduals(Temp_diag_C2)
+plot(Temp_diag_res_C2)
+```
+
+#### Mustelidae
+
+```{r}
+Temp_diag_M <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                   data=tempC_modsdf_M, 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_M <- simulateResiduals(Temp_diag_M)
+plot(Temp_diag_res_M)
+```
+
+The previously identified outlier caused the inadequacies of the model.
+
+```{r}
+Temp_diag_M2 <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label/Locality),
+                      data=tempC_modsdf_M[-27,], 
+                   family=beta_family(), REML = T)
+
+Temp_diag_res_M2 <- simulateResiduals(Temp_diag_M2)
+plot(Temp_diag_res_M2)
+```
+
+### Random structure
+
+Following the @zuur2009 protocol, we evaluated the relevance of the inclusion of random effects. For this we fit the previously selected model with and without the random effects (Label and Locality of each study). We selected the model with the best structure using the Akaike information criterion (AIC) with the AICcmodavg package [@AICcmodavg].
+
+#### All data
+
+```{r}
+
+Temp_r0 <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2,
+                   dispformula = ~diet_dist+ p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r1 <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label),
+                   dispformula = ~diet_dist+ p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r2 <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label/Locality),
+                   dispformula = ~diet_dist+ p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+
+temp_AICtab <- aictab(cand.set = list(Temp_r0, Temp_r1, Temp_r2),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+
+kbl(temp_AICtab, caption = "Random-effects structure selection table for Temporal co-occurrence data", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+```{r}
+
+estimate_grouplevel(Temp_r1) %>% # Get random parameters
+  plot()+  #plot
+  # aesthetic changes
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+```
+
+#### Felidae
+
+```{r}
+Temp_r0_F <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2,
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r1_F <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label),
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r2_F <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label/Locality),
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), 
+                   REML = T)
+
+
+temp_AICtab_F <- aictab(cand.set = list(Temp_r0_F, Temp_r1_F, Temp_r2_F),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+
+
+kbl(temp_AICtab_F, caption = "Random-effects structure selection table for Temporal co-occurrence data when Felidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+```{r}
+estimate_grouplevel(Temp_r1_F) %>% # Get random parameters
+  plot()+  #plot
+  # aesthetic changes
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+```
+
+#### Canidae
+
+```{r}
+Temp_r0_C <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2,
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r1_C <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label),
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r2_C <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label/Locality),
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), 
+                   REML = T)
+
+
+temp_AICtab_C <- aictab(cand.set = list(Temp_r0_C, Temp_r1_C, Temp_r2_C),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+
+kbl(temp_AICtab_C, caption = "Random-effects structure selection table for Temporal co-occurrence data when Canidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+```{r}
+estimate_grouplevel(Temp_r1_C) %>% # Get random parameters
+  plot()+  #plot
+  # aesthetic changes
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+
+```
+
+#### Mustelidae
+
+```{r}
+Temp_r0_M <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2,
+                   data=tempC_modsdf_M, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r1_M <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label),
+                   data=tempC_modsdf_M, 
+                   family=beta_family(), 
+                   REML = T)
+
+Temp_r2_M <- glmmTMB(formula = Ov_coeff~ (mass_ratio+ I(mass_ratio^2)+ p_distance+ diet_dist+ Lat_abs+ Samp_dur)^2 +(1|Label/Locality),
+                   data=tempC_modsdf_M, 
+                   family=beta_family(), 
+                   REML = T)
+
+
+temp_AICtab_M <- aictab(cand.set = list(Temp_r0_M, Temp_r1_M, Temp_r2_M),
+                       modnames = c("no random",
+                                    "Label random", 
+                                    "Label/Locality random"),
+                                    second.ord = F)
+kbl(temp_AICtab_M, caption = "Random-effects structure selection table for Temporal co-occurrence data when Mustelidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+
+```
+
+```{r}
+estimate_grouplevel(Temp_r1_M) %>% # Get random parameters
+  plot()+  #plot
+  # aesthetic changes
+  theme_bw()+
+  theme(text=element_text(family = "Roboto"))
+```
+
+### Fixed predictor selections
+
+#### All data
+
+```{r}
+
+TC_global <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), REML = F,
+                   na.action = "na.fail")
+
+TC_selec <- dredge(TC_global, rank = "AIC", 
+                   fixed = c("disp(p_distance)","disp(Lat_abs)","disp(Samp_dur)"), 
+                   m.lim= c(NA,6))
+
+```
+
+```{r}
+kbl(TC_selec, caption = "Fixed-effects structure selection table for temporal co-occurrence data", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+#### Felidae
+
+```{r}
+TC_global_F <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), REML = F,
+                   na.action = "na.fail")
+
+TC_selec_F <- dredge(TC_global_F, rank = "AIC", 
+                   fixed = c("disp(p_distance)","disp(Lat_abs)","disp(Samp_dur)"), 
+                   m.lim= c(NA,6))
+
+```
+
+```{r}
+kbl(TC_selec_F, caption = "Fixed-effects structure selection table for temporal co-occurrence data when Felidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+#### Canidae
+
+```{r}
+TC_global_C <- glmmTMB(formula = Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2+ (1|Label),
+                      dispformula = ~Samp_dur+Lat_abs,
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), REML = F,
+                   na.action = "na.fail")
+
+TC_selec_C <- dredge(TC_global_C, rank = "AIC", 
+                   fixed = c("disp(Lat_abs)","disp(Samp_dur)"), 
+                   m.lim= c(NA,5))
+
+```
+
+```{r}
+kbl(TC_selec_C, caption = "Fixed-effects structure selection table for temporal co-occurrence data when Canidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+#### Mustealidae
+
+```{r}
+tempC_modsdf_M2 <- slice(tempC_modsdf_M, -27)
+
+TC_global_M <- betareg(Ov_coeff ~ (mass_ratio+ I(mass_ratio^2)+p_distance + diet_dist+Lat_abs+Samp_dur)^2,
+                         data=tempC_modsdf_M2, 
+                         na.action = "na.fail")
+
+TC_selec_M <- dredge(TC_global_M, rank = "AIC", 
+                   m.lim= c(NA,3))
+
+```
+
+```{r}
+kbl(TC_selec_M, caption = "Fixed-effects structure selection table for temporal co-occurrence data when Mustelidae is dominant competitor", digits = 3) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+### Confidence intervals explorations
+
+```{r}
+# Function to get 85%IC
+get_cibeta <- function(mod_name, mods){
+  ci_df <- parameters::model_parameters(mods, ci = 0.85) %>% 
+    select(Parameter, Coefficient, CI_low, CI_high) %>% 
+    filter(Parameter != "(Intercept)") %>%
+    mutate(Model = mod_name,
+           Informative = case_when(
+    CI_low < 0 & CI_high < 0 ~ "yes",
+    CI_low > 0 & CI_high > 0 ~ "yes",
+    TRUE ~ "no")) 
+  return(ci_df)   
+}
+
+
+```
+
+Consistent with the model selection strategy (AIC) and to avoid uninformative variables, we explored the 85% confidence intervals of the regression coefficients of the best models [@sutherland2023]. Variables whose 85% CI overlap 0 are considered as uninformative and therefore not included in the inference [@arnold2010].
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "All data best model 85% CI"
+#|  - "Felidae data best model 85% CI"
+#|  - "Canidae data best model 85% CI"
+#|  - "Mustelidae data best model 85% CI"
+#| layout-ncol: 2
+#| fig-width: 8
+# get best models for all data 
+TC_best_mods <- get.models(TC_selec, subset = delta <2, REML = T)
+# get best models for felidae subset data
+TC_best_mods_F <- get.models(TC_selec_F, subset = delta <2, REML = T)
+# get best models for Canidae subset data
+TC_best_mods_C <- get.models(TC_selec_C, subset = delta <2, REML = T)
+# get best models for Mustelidae subset data
+TC_best_mods_M <- get.models(TC_selec_M, subset = delta <2)
+
+# Apply the function to obtain the table of coefficients of selected the models
+TC_best_ci <- map2_df(names(TC_best_mods), TC_best_mods, get_ci) 
+TC_best_ci_F <- map2_df(names(TC_best_mods_F), TC_best_mods_F, get_ci)
+TC_best_ci_C <- map2_df(names(TC_best_mods_C), TC_best_mods_C, get_ci)
+TC_best_ci_M <- map2_df(names(TC_best_mods_M), TC_best_mods_M, get_cibeta) 
+
+ci_plot(TC_best_ci)+ labs(title= "All data")
+ci_plot(TC_best_ci_F)+ labs(title= "Felidae dominant competitor")
+ci_plot(TC_best_ci_C)+ labs(title= "Canidae dominant competitor")
+ci_plot(TC_best_ci_M)+ labs(title= "Mustelidae dominant competitor")
+```
+
+## Summary selected models
+
+Note that some variables have coefficients whose 85% confidence intervals overlap 0. These variables are retained when they have interactions with other variables and these interactions do not overlap with 0.
+
+### Spatial co-occurrence models
+
+```{r}
+SC_mod1 <- glmmTMB(formula = SIF~ I(mass_ratio^2)+ p_distance,
+                   data=spatC_modsdf,                     
+                   family= t_family(link = "identity"),
+                   REML = F,                    
+                   start = list(psi = log(1.69)),
+                   map = list(psi = factor(NA))) 
+
+SC_mod2 <- glmmTMB(formula = SIF~ I(mass_ratio^2),
+                   data=spatC_modsdf,                     
+                   family= t_family(link = "identity"),
+                   REML = F,                    
+                   start = list(psi = log(1.69)), 
+                   map = list(psi = factor(NA)))  
+
+
+SC_mods <- list(SC_mod1, SC_mod2) %>%    
+  map(model_parameters, digits= 2, ci= 0.85) %>%    
+  reduce(rbind) %>%   
+  mutate(Model= c(rep("SIF~ I(mass_ratio^2)+ p_distance", 4),
+                  rep("SIF~ I(mass_ratio^2)", 3))) %>%    
+  select(-SE, -z, -df_error)    
+
+
+```
+
+```{r}
+SC_mod1_F <- glmmTMB(formula = SIF~ I(mass_ratio^2)*Lat_abs,
+                     dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                     data=spatC_modsdf_F,
+                     family=t_family(link = "identity"),
+                     REML = F,
+                     start = list(psi = log(2.87)),
+                     map = list(psi = factor(NA)))   
+
+SC_mod2_F <- glmmTMB(formula = SIF~ I(mass_ratio^2)+ Lat_abs,
+                     dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                     data=spatC_modsdf_F,
+                     family=t_family(link = "identity"),
+                     REML = F,
+                     start = list(psi = log(2.87)),
+                     map = list(psi = factor(NA)))  
+
+SC_mod3_F <- glmmTMB(formula = SIF~ I(mass_ratio^2),
+                     dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                     data=spatC_modsdf_F,
+                     family=t_family(link = "identity"),
+                     REML = F,
+                     start = list(psi = log(2.87)),
+                     map = list(psi = factor(NA)))
+
+SC_mod4_F <- glmmTMB(formula = SIF~ I(mass_ratio^2)*p_distance,
+                     dispformula = ~ mass_ratio+p_distance+Lat_abs+ Avg_dist,
+                     data=spatC_modsdf_F,
+                     family=t_family(link = "identity"),                    
+                     REML = F,
+                     start = list(psi = log(2.87)),           
+                     map = list(psi = factor(NA)))  
+
+SC_mods_F <- list(SC_mod1_F, SC_mod2_F, SC_mod3_F, SC_mod4_F) %>%
+  map(model_parameters, digits= 2, ci= 0.85) %>%
+  reduce(rbind) %>%   
+  mutate(Model= c(rep("SIF~ I(mass_ratio^2)* Lat_abs", 9),
+                  rep("SIF~ I(mass_ratio^2)+ Lat_abs", 8),
+                  rep("SIF~ I(mass_ratio^2)", 7),
+                  rep("SIF~ I(mass_ratio^2)*p_distance", 9))) %>%
+  select(-SE, -z, -df_error)
+```
+
+```{r}
+
+SC_mods_tab <- rbind(SC_mods, SC_mods_F)
+
+kbl(SC_mods_tab, 
+    caption = "Spatial co-occurrence selected models", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>% 
+    pack_rows("Spatial co-occurrence models -all data",1, nrow(SC_mods)) %>%
+  pack_rows("Spatial co-occurrence models -Felidae as dominant competitor",1 + nrow(SC_mods),nrow(SC_mods)+ nrow(SC_mods_F))
+```
+
+#### Goftest of spatial selected models
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "SIF~ I(mass_ratio^2)+ p_distance goftest -all data"
+#|  - "SIF~ I(mass_ratio^2) goftest - -all data"
+#|  - "SIF~ p_distance goftest- -all data"
+#| layout-ncol: 2
+#| fig-width: 8
+SC_best_goft_list <- list(SC_mod1, SC_mod2) 
+SC_best_goft <- lapply(SC_best_goft_list, simulateResiduals, plot=T)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "SSIF~ I(mass_ratio^2)* Lat_abs goftest -Felidae as dominant competitor"
+#|  - "SIF~ I(mass_ratio^2)+ Lat_abs goftest -Felidae as dominant competitor"
+#|  - "SIF~ I(mass_ratio^2) goftest -Felidae as dominant competitor"
+#|  - "SIF~ I(mass_ratio^2)*p_distance goftest -Felidae as dominant competitor"
+#| layout-ncol: 2
+#| fig-width: 8
+SC_best_goft_list_F <- list(SC_mod1_F, SC_mod2_F, SC_mod3_F, SC_mod4_F) 
+SC_best_goft_F <- lapply(SC_best_goft_list_F, simulateResiduals, plot=T)
+```
+
+Because all models fit adequately, we base our inference on models that contain interactions of the variables
+
+### Temporal co-occurrence models
+
+```{r}
+TC_mod1 <- glmmTMB(formula = Ov_coeff ~ Lat_abs+ mass_ratio+ p_distance + (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+
+TC_mod2 <- glmmTMB(formula = Ov_coeff ~ Lat_abs+ I(mass_ratio^2)+ p_distance+ (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+TC_mod3 <- glmmTMB(formula = Ov_coeff ~ I(mass_ratio^2)*p_distance+  (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf, 
+                   family=beta_family(), 
+                   REML = T)
+
+TC_mods <- list(TC_mod1, TC_mod2, TC_mod3) %>% 
+  map(model_parameters, digits= 2, ci= 0.85) %>% 
+  reduce(rbind) %>%
+  mutate(Model= c(rep("Ov_coeff ~ Lat_abs+ mass_ratio+ p_distance + (1|Label)", 9),
+                  rep(" Ov_coeff ~ Lat_abs+ I(mass_ratio^2)+ p_distance+ (1|Label)", 9),
+                  rep("Ov_coeff ~ I(mass_ratio^2)*p_distance+  (1|Label)", 9))) %>% 
+  select(-SE, -z, -df_error, -Group)
+
+```
+
+```{r}
+TC_mod1_F <- glmmTMB(formula = Ov_coeff ~ p_distance*diet_dist+ (1|Label),
+                      dispformula = ~p_distance+ Samp_dur+Lat_abs,
+                   data=tempC_modsdf_F, 
+                   family=beta_family(), 
+                   REML = T)
+
+TC_mods_F <- model_parameters(TC_mod1_F, digits= 2, ci= 0.85) %>% 
+  mutate(Model= c(rep("Ov_coeff ~ p_distance*diet_dist+ (1|Label)", 9))) %>% 
+  select(-SE, -z, -df_error, -Group)
+
+```
+
+```{r}
+
+TC_mod1_C <- glmmTMB(formula = Ov_coeff ~ Lat_abs+ mass_ratio+ (1|Label),
+                      dispformula = ~Samp_dur+Lat_abs,
+                   data=tempC_modsdf_C, 
+                   family=beta_family(), 
+                   REML = T)
+
+TC_mods_C <- list(TC_mod1_C) %>% 
+  map(model_parameters, digits= 2, ci= 0.85) %>% 
+  reduce(rbind) %>%
+  mutate(Model= c(rep("Ov_coeff ~ Lat_abs+ mass_ratio+ (1|Label)", 7))) %>% 
+  select(-SE, -z, -df_error,-Group)
+
+```
+
+```{r}
+TC_mod1_M<- betareg(Ov_coeff ~ p_distance + diet_dist+Lat_abs,
+                         data=tempC_modsdf_M2)
+
+TC_mods_M <- model_parameters(TC_mod1_M, digits= 2, ci= 0.85) %>% 
+  mutate(Component= "conditional",
+        Effects= "fixed",
+        Model= "Ov_coeff ~ p_distance + diet_dist+Lat_abs")%>% 
+  select(-SE, -z, -df_error)
+
+```
+
+```{r}
+
+TC_mods_tab <- rbind(TC_mods, TC_mods_F, TC_mods_C, TC_mods_M)
+
+kbl(TC_mods_tab, 
+    caption = "Temporal co-occurrence selected models", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>% 
+    pack_rows("Temporal co-occurrence models -all data",1, nrow(TC_mods)) %>%
+    pack_rows("Temporal co-occurrence models -Felidae as dominant competitor",1+ nrow(TC_mods),nrow(TC_mods)+ nrow(TC_mods_F)) %>%
+  pack_rows("Temporal co-occurrence models -Canidae as dominant competitor",1+nrow(TC_mods)+ nrow(TC_mods_F), nrow(TC_mods)+ nrow(TC_mods_F)+ nrow(TC_mods_C)) %>% 
+  pack_rows("Temporal co-occurrence models -Mustelidae as dominant competitor", 1+nrow(TC_mods)+ nrow(TC_mods_F)+ nrow(TC_mods_C), nrow(TC_mods)+ nrow(TC_mods_F)+ nrow(TC_mods_C)+ nrow(TC_mods_M))
+  
+
+```
+
+#### Goftest of temporal selected models
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Ov_coeff ~ Lat_abs+ mass_ratio+ p_distance + (1|Label) goftest -all data"
+#|  - "Ov_coeff ~ Lat_abs+ I(mass_ratio^2)+ p_distance+ (1|Label) goftest - -all data"
+#|  - "Ov_coeff ~ I(mass_ratio^2)*p_distance+  (1|Label) goftest- -all data"
+#| layout-ncol: 2
+#| fig-width: 8
+TC_best_goft_list <- list(TC_mod1, TC_mod2, TC_mod3) 
+TC_best_goft <- lapply(TC_best_goft_list, simulateResiduals, plot=T)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Ov_coeff ~ p_distance*diet_dist+ (1|Label) goftest -Felidae as dominant competitor"
+#| layout-ncol: 2
+#| fig-width: 8
+TC_best_goft_list_F <- list(TC_mod1_F) 
+TC_best_goft_F <- lapply(TC_best_goft_list_F, simulateResiduals, plot=T)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-subcap: 
+#|  - "Ov_coeff ~ mass_ratio + (1 | Label) goftest -Canidae as dominant competitor"
+#|  - "Ov_coeff ~ Lat_abs + mass_ratio + (1 | Label) goftest -Canidae as dominant competitor"
+#| layout-ncol: 2
+#| fig-width: 8
+TC_best_goft_list_C <- list(TC_mod1_C) 
+TC_best_goft_C <- lapply(TC_best_goft_list_C, simulateResiduals, plot=T)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| layout-ncol: 2
+#| fig-width: 8
+plot(TC_mod1_M)
+```
+
+## Predictions
+
+```{r}
+# Spatial all data
+
+SC_pred_mass <- ggemmeans(SC_mod1, 
+                          terms = c("mass_ratio[-1.2:3.1 by=.2]"), 
+                          ci_level=.85,
+                          ci.lvl = .85) %>% 
+  mutate(mass_real= (x* attr(scale(spatC_db$mass_ratio), "scaled:scale"))+ attr(scale(spatC_db$mass_ratio), "scaled:center"))
+
+SC_pred_pdist <- ggemmeans(SC_mod1, 
+                           terms = "p_distance[-2.3:1.2 by=.2]", 
+                           ci_level=.85,
+                          ci.lvl = .85) %>% 
+  mutate(p_real= (x* attr(scale(spatC_db$p_distance), "scaled:scale"))+ attr(scale(spatC_db$p_distance), "scaled:center"))
+
+# Spatial Felidae
+SCp_distvec_F <- c(max(spatC_modsdf_F$p_distance), mean(spatC_modsdf_F$p_distance),
+               min(spatC_modsdf_F$p_distance))
+
+SCp_latvec_F <- c(max(spatC_modsdf_F$Lat_abs), mean(spatC_modsdf_F$Lat_abs),
+               min(spatC_modsdf_F$Lat_abs))
+
+SC_pred_massxp_F <- ggemmeans(SC_mod4_F, 
+                              terms =c("mass_ratio[all]", "p_distance[SCp_distvec_F]"),
+                              ci_level=.85,
+                              ci.lvl = .85) %>% 
+  mutate( mass_real= (x* attr(scale(spatC_db$mass_ratio), "scaled:scale"))+ attr(scale(spatC_db$mass_ratio), "scaled:center"),
+        p_disreal= (as.numeric(as.character(group))* attr(scale(spatC_db$p_distance), "scaled:scale"))+ attr(scale(spatC_db$p_distance), "scaled:center")) %>% 
+  mutate(across(p_disreal, round, 2))
+
+SC_pred_massxl_F <- ggemmeans(SC_mod1_F, 
+                              terms =c("mass_ratio[all]", "Lat_abs[SCp_latvec_F]"),
+                              ci_level=.85,
+                              ci.lvl = .85) %>% 
+  mutate( mass_real= (x* attr(scale(spatC_db$mass_ratio), "scaled:scale"))+ attr(scale(spatC_db$mass_ratio), "scaled:center"),
+        lat_real= (as.numeric(as.character(group))* attr(scale(spatC_db$Lat_abs), "scaled:scale"))+ attr(scale(spatC_db$Lat_abs), "scaled:center")) %>% 
+  mutate(across(lat_real, round, 2))
+
+# Temporal all
+TCp_distvec <- c(max(tempC_modsdf$p_distance), mean(tempC_modsdf$p_distance),
+               min(tempC_modsdf$p_distance))
+
+TC_pred_massxp <- ggemmeans(TC_mod3, 
+                            terms =c("mass_ratio[-1.3:3.1 by=.2]", 
+                                              "p_distance[TCp_distvec]"),
+                            ci_level=.85,
+                            ci.lvl = .85) %>% 
+  mutate( mass_real= (x* attr(scale(tempC_db$mass_ratio), "scaled:scale"))+ attr(scale(tempC_db$mass_ratio), "scaled:center"),
+        p_disreal= (as.numeric(as.character(group))* attr(scale(tempC_db$p_distance), "scaled:scale"))+ attr(scale(tempC_db$p_distance), "scaled:center")) %>% 
+  mutate(across(p_disreal, round, 2))
+
+TC_pred_lat <- ggemmeans(TC_mod1, terms = c("Lat_abs[-1.6:2.3 by=.2]"),
+                         ci_level=.85,
+                         ci.lvl = .85) %>% 
+  mutate(lat_real= (x* attr(scale(tempC_db$Lat_abs), "scaled:scale"))+ attr(scale(tempC_db$Lat_abs), "scaled:center"))
+
+# Temporal Felidae
+
+TC_pred_pxdiet_F1 <- ggemmeans(TC_mod1_F, 
+                              terms = c("p_distance[-0.16:1.28 by=.2]", "diet_dist[Diff_diet]"),
+                              ci_level=.85,
+                              ci.lvl = .85) %>% 
+  mutate(p_real= (x* attr(scale(tempC_db$p_distance), "scaled:scale"))+ attr(scale(tempC_db$p_distance), "scaled:center"))
+
+TC_pred_pxdiet_F2 <- ggemmeans(TC_mod1_F, 
+                              terms = c("p_distance[-2.3:1.08 by=.2]", "diet_dist[Same_diet]"),
+                              ci_level=.85,
+                              ci.lvl = .85) %>% 
+  mutate(p_real= (x* attr(scale(tempC_db$p_distance), "scaled:scale"))+ attr(scale(tempC_db$p_distance), "scaled:center"))
+
+
+TC_pred_pxdiet_F <- rbind(TC_pred_pxdiet_F1, TC_pred_pxdiet_F2)
+
+# Temporal Canidae 
+
+TC_pred_mass_C <- ggemmeans(TC_mod1_C, 
+                            terms = c("mass_ratio[-1.2:1.28 by=.2]"),
+                             ci_level=.85,
+                             ci.lvl = .85) %>% 
+  mutate(mass_real= (x* attr(scale(tempC_db$mass_ratio), "scaled:scale"))+ attr(scale(tempC_db$mass_ratio), "scaled:center"))
+
+TC_pred_lats_C <- ggemmeans(TC_mod1_C, 
+                            terms = c("Lat_abs[-1.4:2.3]"),
+                            ci_level=.85,
+                            ci.lvl = .85) %>% 
+  mutate(lat_real= (x* attr(scale(tempC_db$Lat_abs), "scaled:scale"))+ attr(scale(tempC_db$Lat_abs), "scaled:center"))
+
+# Temporal Mustelidae
+
+TC_pred_pdist_M <- ggemmeans(TC_mod1_M, 
+                             terms = c("p_distance[-1.7:1.3 by=.2]"),
+                             ci_level=.85,
+                             ci.lvl = .85)%>% 
+  mutate(p_real= (x* attr(scale(tempC_db$p_distance), "scaled:scale"))+ attr(scale(tempC_db$p_distance), "scaled:center"))
+
+TC_pred_diet_M <- ggemmeans(TC_mod1_M, terms = c("diet_dist"),
+                            ci_level=.85,
+                            ci.lvl = .85)
+
+TC_pred_lat_M <- ggemmeans(TC_mod1_M, terms = c("Lat_abs[-1.4:2.3 by=.2]"))%>% 
+  mutate(lat_real= (x* attr(scale(tempC_db$Lat_abs), "scaled:scale"))+ attr(scale(tempC_db$Lat_abs), "scaled:center"))
+
+
+Lat_TC <- bind_rows(TC_pred_lat, TC_pred_lats_C, TC_pred_lat_M) %>% 
+  mutate(data_from= c(rep("All species", length(TC_pred_lat$x)),
+                      rep("Canidae", length(TC_pred_lats_C$x)),
+                      rep("Mustelidae", length(TC_pred_lat_M$x))))
+
+```
+
+### Plots
+
+```{r}
+
+# Spatial all data
+(SC_mass_plot <- ggplot(SC_pred_mass)+
+   geom_hline(yintercept = 1, linetype= "dashed", size= 1)+
+   geom_ribbon(aes(x= mass_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high)
+              , alpha=0.7, fill= "#fde725")+
+  geom_line(aes(x= mass_real, y=predicted),
+            size= 0.8 )+
+  labs(x= "ln(Mass ratio)",
+        y= "Spatial Overlap",
+       tag= "A")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto")))
+
+(SC_pdist_plot <- ggplot(SC_pred_pdist)+
+    geom_hline(yintercept = 1, linetype= "dashed", size= 1)+
+    geom_ribbon(aes(x= p_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high)
+              , alpha=0.7, fill= "#fde725")+
+  geom_line(aes(x= p_real, y=predicted),
+            size= 0.8 )+
+  labs(x= "Phylogenetic distance",
+        y= "Spatial Overlap",
+       tag= "B")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto")))
+
+# Spatial Felidae
+
+(SC_mxp_plot_F <- ggplot(SC_pred_massxp_F)+
+    geom_hline(yintercept = 1, linetype= "dashed", size= 1)+
+  geom_ribbon(aes(x= mass_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high,
+                  fill= as.factor(p_disreal),
+                  group= as.factor(p_disreal))
+              , alpha= 0.7, linewidth= 1)+
+    scale_fill_viridis_d()+
+  geom_line(aes(x= mass_real, y=predicted, group= as.factor(p_disreal),
+                linetype= as.factor(p_disreal)),
+            size= 0.8 )+
+  labs(x= "ln(Mass ratio)",
+        y= "Spatial Overlap",
+       group= "Phylogenetic \ndistance",
+       linetype= "Phylogenetic \ndistance",
+       fill= "Phylogenetic \ndistance",
+       tag= "C")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"),
+         legend.direction="horizontal",
+         legend.position = c(0.5, 0.10),
+         legend.background = element_blank()))
+
+
+(SC_mxl_plot_F <- ggplot(SC_pred_massxl_F)+
+    geom_hline(yintercept = 1, linetype= "dashed", size= 1)+
+  geom_ribbon(aes(x= mass_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high,
+                  fill= as.factor(lat_real),
+                  group= as.factor(lat_real))
+              , alpha= 0.7, linewidth= 1)+
+    scale_fill_viridis_d()+
+  geom_line(aes(x= mass_real, y=predicted, group= as.factor(lat_real),
+                linetype= as.factor(lat_real)),
+            size= 0.8 )+
+  labs(x= "ln(Mass ratio)",
+        y= "Spatial Overlap",
+       group= "Absolute \nlatitude",
+       linetype= "Absolute \nlatitude",
+       fill= "Absolute \nlatitude",
+       tag= "D")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"),
+         legend.direction="horizontal",
+         legend.position = c(0.5, 0.10),
+         legend.background = element_blank()))
+
+# Temporal all
+
+(TC_mxp_plot <- ggplot(TC_pred_massxp)+
+  geom_ribbon(aes(x= mass_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high,
+                  fill= as.factor(p_disreal),
+                  group= as.factor(p_disreal))
+              , alpha= 0.7, linewidth= 1)+
+    scale_fill_viridis_d()+
+  geom_line(aes(x= mass_real, y=predicted, group= as.factor(p_disreal),
+                linetype= as.factor(p_disreal)),
+            size= 0.8 )+
+  labs(x= "ln(Mass ratio)",
+        y= "Temporal Overlap",
+       group= "Phylogenetic \ndistance",
+       fill= "Phylogenetic \ndistance",
+       linetype= "Phylogenetic \ndistance",
+       tag= "E")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"),
+         legend.direction="horizontal",
+         legend.position = c(0.45, 0.10),
+         legend.background = element_blank()))
+
+# TEmporal Felidae
+
+(TC_pxd_plot_F <- ggplot(TC_pred_pxdiet_F)+
+   geom_ribbon(aes(x= p_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high,
+                  fill= group, 
+                  group= group,
+                  linetype= group)
+              , alpha=0.7)+
+    scale_fill_viridis_d()+
+  geom_line(aes(x= p_real, y=predicted, group= group,
+                linetype= group),
+            size= 0.8 )+
+  labs(x= "Phylogenetic distance",
+        y= "Temporal Overlap",
+       group= "Diet \ndistance",
+       fill= "Diet \ndistance",
+       linetype= "Diet \ndistance",
+       tag= "F")+
+  scale_x_continuous(expand = c(0,0))+
+    scale_y_continuous(limits = c(0.3,1))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"),
+         legend.direction="horizontal",
+         legend.position = c(0.55, 0.10),
+         legend.background = element_blank()))
+
+
+# Temporal Canidae
+
+(TC_mass_plot_C <- ggplot(TC_pred_mass_C)+
+    geom_ribbon(aes(x= mass_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high)
+              , alpha=0.7, fill= "#fde725")+
+  geom_line(aes(x= mass_real, y=predicted),
+            size= 0.8 )+
+  labs(x= "ln(Mass ratio)",
+        y= "Temporal Overlap",
+       tag= "G")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto")))
+
+
+# Temporal Mustelidae 
+
+(TC_p_plot_M <- ggplot(TC_pred_pdist_M)+
+  geom_ribbon(aes(x= p_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high)
+              , alpha=0.7, fill= "#fde725")+
+  geom_line(aes(x= p_real, y=predicted),
+            size= 0.8 )+
+  labs(x= "Phylogenetic distance",
+        y= "Temporal Overlap",
+       tag= "H")+
+  scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"))
+  )
+
+(TC_diet_plot_M <- ggplot(TC_pred_diet_M)+
+   geom_errorbar(aes(x= x, y= predicted,
+                  ymin= conf.low, ymax= conf.high)
+              , size= 1, width= 0.1)+
+  geom_point(aes(x= x, y=predicted),
+            size= 4)+
+  labs(x= "Diet distance",
+        y= "Temporal Overlap",
+       tag= "I")+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"))
+  )
+
+(TC_Lat_plot <-  ggplot(Lat_TC)+
+   geom_ribbon(aes(x= lat_real, y= predicted,
+                  ymin= conf.low, ymax= conf.high,
+                  group= data_from, fill=data_from)
+              , alpha=0.7)+
+  geom_line(aes(x= lat_real, y=predicted, linetype= data_from, group= data_from),
+            size= 0.8)+
+    scale_fill_viridis_d()+
+  labs(x= "Absolute latitude",
+        y= "Temporal Overlap",
+       fill= "Dominant \ncompetitor",
+       linetype= "Dominant \ncompetitor",
+       tag= "J")+
+   theme_bw()+
+    scale_x_continuous(expand = c(0,0))+
+  theme_bw()+
+   theme(text = element_text(size=13, family = "Roboto"),
+         legend.direction="vertical",
+         legend.position = c(1.2, 0.5),
+         legend.background = element_blank()))
+
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-width: 11.5
+#| fig-height: 11.5
+(CPrediction_plot <- (SC_mass_plot + SC_pdist_plot+ SC_mxp_plot_F + 
+                       SC_mxl_plot_F+ TC_mxp_plot+ TC_pxd_plot_F+ 
+                       TC_mass_plot_C+ TC_p_plot_M+ TC_diet_plot_M+
+                       TC_Lat_plot)+
+  plot_layout(ncol = 3))
+```
+
+```{r}
+#| eval: false
+ggsave(filename = "Figs/Cpreds_plot.svg", plot = CPrediction_plot,
+        width = 11.5, height = 11.5)
+
+```

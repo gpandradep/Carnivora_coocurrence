@@ -1,0 +1,25 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Carnivora_coocurrence"
+  navbar:
+    background: "#6188bc"
+    page-footer:
+     right: "Page built with [Quarto](https://quarto.org/)."
+     background: "#D9E3E4" 
+    right:
+      - href: C_modelling_2023.qmd
+        text: Competitive Modelling
+      - href: P_modelling_2023.qmd
+        text: Predato-prey Modelling
+
+format:
+  html:
+    theme: journal
+    css: styles.css
+    toc: true
+
+editor: visual
+
