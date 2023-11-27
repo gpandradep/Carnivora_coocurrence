@@ -4,7 +4,7 @@ subtitle: "From co-occurrence patterns to agonistic interactions. A meta-analysi
 bibliography: references.bib
 ---
 
-Add Zenodo Doi
+[![](https://zenodo.org/badge/724158517.svg)](https://zenodo.org/doi/10.5281/zenodo.10211295)
 
 # A repository for: {#a-repository-for}
 
@@ -37,31 +37,31 @@ This folder has 5 files and 2 sub-folders.
 
 **`./Data/Literature/bib_database.csv`**: Database in csv format with the 314 fully scanned articles. The base columns have the following information
 
-+-----------------+-------------------------------------------------------+
-| Column          | Description                                           |
-+=================+=======================================================+
-| label           | Identifier of each article                            |
-+-----------------+-------------------------------------------------------+
-| title           | Complete title                                        |
-+-----------------+-------------------------------------------------------+
-| author          | List of authors                                       |
-+-----------------+-------------------------------------------------------+
-| journal         | publication journal                                   |
-+-----------------+-------------------------------------------------------+
-| abstract        | abstract of each article                              |
-+-----------------+-------------------------------------------------------+
-| year            | year of publication                                   |
-+-----------------+-------------------------------------------------------+
-| doi             | digital object indentification                        |
-+-----------------+-------------------------------------------------------+
-| volume          | journal volume                                        |
-+-----------------+-------------------------------------------------------+
-| language        | language of publication                               |
-+-----------------+-------------------------------------------------------+
-| issue           | journal issue                                         |
-+-----------------+-------------------------------------------------------+
-| Selected        | Selected or not selected during the screening process |
-+-----------------+-------------------------------------------------------+
++----------------+-------------------------------------------------------+
+| Column         | Description                                           |
++================+=======================================================+
+| label          | Identifier of each article                            |
++----------------+-------------------------------------------------------+
+| title          | Complete title                                        |
++----------------+-------------------------------------------------------+
+| author         | List of authors                                       |
++----------------+-------------------------------------------------------+
+| journal        | publication journal                                   |
++----------------+-------------------------------------------------------+
+| abstract       | abstract of each article                              |
++----------------+-------------------------------------------------------+
+| year           | year of publication                                   |
++----------------+-------------------------------------------------------+
+| doi            | digital object indentification                        |
++----------------+-------------------------------------------------------+
+| volume         | journal volume                                        |
++----------------+-------------------------------------------------------+
+| language       | language of publication                               |
++----------------+-------------------------------------------------------+
+| issue          | journal issue                                         |
++----------------+-------------------------------------------------------+
+| Selected       | Selected or not selected during the screening process |
++----------------+-------------------------------------------------------+
 
 : Column description of bib_database.csv
 
@@ -148,7 +148,7 @@ This folder has 5 files and 2 sub-folders.
 +---------------+----------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------+---------------+
 | Pred_evidence | Direct evidence of predation                                                                                                                       | Global Interaction data base [@poelen2014] | Predator-prey |
 +---------------+----------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------+---------------+
-| Hunt_sourve   | Bibliographic source of the hunting strategy                                                                                                       | Literature                                 | Predator-prey |
+| Hunt_source   | Bibliographic source of the hunting strategy                                                                                                       | Literature                                 | Predator-prey |
 +---------------+----------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------+---------------+
 
 : Description of the columns present in the databases of the model data folder
@@ -160,8 +160,8 @@ This folder has 5 files and 2 sub-folders.
 The `qmd` files contain the entire statistical modeling prthe respective results.
 
 \
-**`C_modelling_2023.qmd`** : This file contain the modeling process performed for the co-occurrence data of competing species of carnivorous mammals. It includes both the modeling of the spatial co-occurrence data and the temporal co-occurrence data. The script requires the following data files: `Data/Model data/SpatC_db.csv` and `Data/Model data/tempC_db.csv`. Can be viewed without opening R using the `C_modelling_2023.html` file and the online page.\
+**`C_modelling_2023.qmd`** : This file contain the modeling process performed for the co-occurrence data of competing species of carnivorous mammals. It includes both the modeling of the spatial co-occurrence data and the temporal co-occurrence data. The script requires the following data files: `Data/Model data/SpatC_db.csv` and `Data/Model data/tempC_db.csv`. Can be viewed without opening R using the `C_modelling_2023.html` file and the [online page](https://gpandradep.github.io/Carnivora_coocurrence/C_modelling_2023.html).\
 \
-**`P_modelling_2023.qmd`** : This file contain the modeling process performed for the co-occurrence data of Carnivora predators an their mammals preys. It includes both the modeling of the spatial co-occurrence data and the temporal co-occurrence data. The script requires the following data files: `Data/Model data/PpatC_db.csv` and `Data/Model data/tempP_db.csv`. Can be viewed without opening R using the `P_modelling_2023.html` file and the online page.
+**`P_modelling_2023.qmd`** : This file contain the modeling process performed for the co-occurrence data of Carnivora predators an their mammals preys. It includes both the modeling of the spatial co-occurrence data and the temporal co-occurrence data. The script requires the following data files: `Data/Model data/PpatC_db.csv` and `Data/Model data/tempP_db.csv`. Can be viewed without opening R using the `P_modelling_2023.html` file and the [online page](https://gpandradep.github.io/Carnivora_coocurrence/P_modelling_2023.html).
 
 [Back to table of contents ⤒](#a-repository-for)
