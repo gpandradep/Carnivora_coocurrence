@@ -8,7 +8,7 @@ Add Zenodo Doi
 
 # A repository for: {#a-repository-for}
 
-. From co-occurrence patterns to agonistic interactions. A meta-analysis of carnivore mammals camera trap research
+From co-occurrence patterns to agonistic interactions. A meta-analysis of carnivore mammals camera trap research
 
 ## Links to different parts of the page
 

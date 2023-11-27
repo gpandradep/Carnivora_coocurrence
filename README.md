@@ -1,8 +1,8 @@
  Add Zenodo Doi
 
-# A repository for: {#a-repository-for}
+# A repository for
 
-. From co-occurrence patterns to agonistic interactions. A meta-analysis of carnivore mammals camera trap research
+From co-occurrence patterns to agonistic interactions. A meta-analysis of carnivore mammals camera trap research
 
 ## Links to different parts of the page
 
@@ -10,9 +10,9 @@
 
 2. [The root folder](#the-root-folder)
 
-3. [The data folder (`./data`)](#the-data-folder-.data)
+3. [The data folder (`./data`)](#the-data-folder-data)
 
-4. [*.qmd files for statistical modeling](#files-for-statistical-modeling)
+4. [Files for statistical modeling](#files-for-statistical-modeling)
 
 ## Description of the repository
 
